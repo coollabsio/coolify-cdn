@@ -1,19 +1,34 @@
-FROM nginx:alpine
+# Build stage
+FROM --platform=$BUILDPLATFORM golang:1.21-alpine AS builder
 
-# Remove default nginx config
-RUN rm /etc/nginx/conf.d/default.conf
+WORKDIR /app
 
-# Copy custom nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy go mod file (go.sum may not exist for projects with no external deps)
+COPY go.mod* go.sum* ./
 
-# Remove default nginx index.html
-RUN rm -f /usr/share/nginx/html/index.html
+# Download dependencies
+RUN go mod download
 
-# Copy JSON files from json directory to nginx html root
-COPY json/ /usr/share/nginx/html/
+# Copy source code
+COPY main.go ./
+COPY json/ ./json/
+
+# Build the binary with optimizations for the target platform
+ARG TARGETOS TARGETARCH BASE_FQDN=coolify.io
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -installsuffix cgo -o coolify-cdn .
+
+# Final stage
+FROM scratch
+
+# Copy the binary from builder stage
+COPY --from=builder /app/coolify-cdn /coolify-cdn
+
+# Set the base FQDN environment variable
+ARG BASE_FQDN=coolify.io
+ENV BASE_FQDN=$BASE_FQDN
 
 # Expose port 80
 EXPOSE 80
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Run the binary
+CMD ["/coolify-cdn"]

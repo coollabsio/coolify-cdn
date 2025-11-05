@@ -125,7 +125,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request, baseFQDN string, file
 	}
 
 	// Set cache control
-	w.Header().Set("Cache-Control", "public, must-revalidate")
+	w.Header().Set("Cache-Control", "public, must-revalidate, max-age=600")
 
 	// Handle ETag caching manually for embedded files
 	etag := etags[r.URL.Path]

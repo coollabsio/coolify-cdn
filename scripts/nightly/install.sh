@@ -5,7 +5,7 @@
 ## ROOT_USERNAME - Predefined root username
 ## ROOT_USER_EMAIL - Predefined root user email
 ## ROOT_USER_PASSWORD - Predefined root user password
-## DOCKER_ADDRESS_POOL_BASE - Custom Docker address pool base (default: 10.0.0.0/8)
+## DOCKER_ADDRESS_POOL_BASE - Custom Docker address pool base (default: 172.24.0.0/16)
 ## DOCKER_ADDRESS_POOL_SIZE - Custom Docker address pool size (default: 24)
 ## DOCKER_POOL_FORCE_OVERRIDE - Force override Docker address pool configuration (default: false)
 ## AUTOUPDATE - Set to "false" to disable auto-updates
@@ -56,7 +56,7 @@ else
 fi
 
 # Docker address pool configuration defaults
-DOCKER_ADDRESS_POOL_BASE_DEFAULT="10.0.0.0/8"
+DOCKER_ADDRESS_POOL_BASE_DEFAULT="172.24.0.0/16"
 DOCKER_ADDRESS_POOL_SIZE_DEFAULT=24
 
 # Check if environment variables were explicitly provided
@@ -625,7 +625,7 @@ fi
 log_section "Step 4/9: Checking Docker configuration"
 echo "4/9 Checking Docker configuration..."
 
-echo " - Network pool configuration: ${DOCKER_ADDRESS_POOL_BASE}/${DOCKER_ADDRESS_POOL_SIZE}"
+echo " - Network pool configuration: ${DOCKER_ADDRESS_POOL_BASE} (size ${DOCKER_ADDRESS_POOL_SIZE})"
 echo " - To override existing configuration: DOCKER_POOL_FORCE_OVERRIDE=true"
 
 mkdir -p /etc/docker
@@ -648,7 +648,7 @@ if [ "$DOCKER_POOL_FORCE_OVERRIDE" = true ] || [ "$EXISTING_POOL_CONFIGURED" = f
         else
             # If force override is enabled or no existing configuration exists,
             # create a new configuration with the specified address pools
-            echo " - Creating new Docker configuration with network pool: ${DOCKER_ADDRESS_POOL_BASE}/${DOCKER_ADDRESS_POOL_SIZE}"
+            echo " - Creating new Docker configuration with network pool: ${DOCKER_ADDRESS_POOL_BASE} (size ${DOCKER_ADDRESS_POOL_SIZE})"
             cat >/etc/docker/daemon.json <<EOL
 {
   "log-driver": "json-file",
@@ -665,7 +665,7 @@ EOL
         fi
     else
         # No existing configuration, create new one
-        echo " - Creating new Docker configuration with network pool: ${DOCKER_ADDRESS_POOL_BASE}/${DOCKER_ADDRESS_POOL_SIZE}"
+        echo " - Creating new Docker configuration with network pool: ${DOCKER_ADDRESS_POOL_BASE} (size ${DOCKER_ADDRESS_POOL_SIZE})"
         cat >/etc/docker/daemon.json <<EOL
 {
   "log-driver": "json-file",

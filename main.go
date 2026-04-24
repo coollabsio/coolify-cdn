@@ -375,6 +375,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request, baseFQDN string, file
 	// Reject unsupported methods before serving or redirecting content.
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD, OPTIONS")
+		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}

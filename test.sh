@@ -174,6 +174,24 @@ else
     test_result "POST request returns 405 Method Not Allowed" "FAIL" "405" "$http_code"
 fi
 
+# Test 9a: 405 response headers
+echo -e "\n🚫 Testing 405 Response Headers"
+response=$(curl -s -I -X POST "$BASE_URL/releases.json")
+allow_header=$(echo "$response" | grep -i "^allow:" | tr -d '\r')
+cache_control=$(echo "$response" | grep -i "^cache-control:" | tr -d '\r')
+
+if echo "$allow_header" | grep -iq "GET"; then
+    test_result "405 response has Allow header" "PASS"
+else
+    test_result "405 response has Allow header" "FAIL" "Allow: GET, HEAD, OPTIONS" "$allow_header"
+fi
+
+if echo "$cache_control" | grep -iq "no-store"; then
+    test_result "405 response has Cache-Control: no-store" "PASS"
+else
+    test_result "405 response has Cache-Control: no-store" "FAIL" "Cache-Control: no-store" "$cache_control"
+fi
+
 # Test 10: HEAD request
 echo -e "\n📋 Testing HEAD Request"
 response=$(curl -s -w "HTTPSTATUS:%{http_code}" -I "$BASE_URL/releases.json")

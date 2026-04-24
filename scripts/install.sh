@@ -651,121 +651,68 @@ if [ -f /etc/docker/daemon.json ]; then
     cp /etc/docker/daemon.json /etc/docker/daemon.json.original-"$DATE"
 fi
 
-# Create coolify configuration with or without address pools based on whether they were explicitly provided
-if [ "$DOCKER_POOL_FORCE_OVERRIDE" = true ] || [ "$EXISTING_POOL_CONFIGURED" = false ]; then
-    # First check if the configuration would actually change anything
-    if [ -f /etc/docker/daemon.json ]; then
-        CURRENT_POOL_BASE=$(jq -r '.["default-address-pools"][0].base' /etc/docker/daemon.json 2>/dev/null)
-        CURRENT_POOL_SIZE=$(jq -r '.["default-address-pools"][0].size' /etc/docker/daemon.json 2>/dev/null)
+DAEMON_JSON="/etc/docker/daemon.json"
+DAEMON_JSON_TMP=$(mktemp)
+DAEMON_JSON_CURRENT_SORTED=$(mktemp)
+DAEMON_JSON_MERGED_SORTED=$(mktemp)
+UPDATE_ADDRESS_POOLS=false
 
-        if [ "$CURRENT_POOL_BASE" = "$DOCKER_ADDRESS_POOL_BASE" ] && [ "$CURRENT_POOL_SIZE" = "$DOCKER_ADDRESS_POOL_SIZE" ]; then
-            echo " - Network pool configuration unchanged, skipping update"
-            NEED_MERGE=false
-        else
-            # If force override is enabled or no existing configuration exists,
-            # create a new configuration with the specified address pools
-            echo " - Creating new Docker configuration with network pool: ${DOCKER_ADDRESS_POOL_BASE}/${DOCKER_ADDRESS_POOL_SIZE}"
-            cat >/etc/docker/daemon.json <<EOL
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  },
-  "default-address-pools": [
-    {"base":"${DOCKER_ADDRESS_POOL_BASE}","size":${DOCKER_ADDRESS_POOL_SIZE}}
-  ]
-}
-EOL
-            NEED_MERGE=true
-        fi
-    else
-        # No existing configuration, create new one
-        echo " - Creating new Docker configuration with network pool: ${DOCKER_ADDRESS_POOL_BASE}/${DOCKER_ADDRESS_POOL_SIZE}"
-        cat >/etc/docker/daemon.json <<EOL
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  },
-  "default-address-pools": [
-    {"base":"${DOCKER_ADDRESS_POOL_BASE}","size":${DOCKER_ADDRESS_POOL_SIZE}}
-  ]
-}
-EOL
-        NEED_MERGE=true
-    fi
-else
-    # Check if we need to update log settings
-    if [ -f /etc/docker/daemon.json ] && jq -e '.["log-driver"] == "json-file" and .["log-opts"]["max-size"] == "10m" and .["log-opts"]["max-file"] == "3"' /etc/docker/daemon.json >/dev/null 2>&1; then
-        echo " - Log configuration is up to date"
-        NEED_MERGE=false
-    else
-        # Create a configuration without address pools to preserve existing ones
-        cat >/etc/docker/daemon.json.coolify <<EOL
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  }
-}
-EOL
-        NEED_MERGE=true
-    fi
+if [ "$EXISTING_POOL_CONFIGURED" = false ]; then
+    UPDATE_ADDRESS_POOLS=true
+elif [ "$DOCKER_POOL_FORCE_OVERRIDE" = true ] && { [ "$DOCKER_POOL_BASE_PROVIDED" = true ] || [ "$DOCKER_POOL_SIZE_PROVIDED" = true ]; }; then
+    UPDATE_ADDRESS_POOLS=true
 fi
 
-# Remove the duplicate daemon.json creation since we handle it above
-if ! [ -f /etc/docker/daemon.json ]; then
-    # If no daemon.json exists, create it with default settings
-    cat >/etc/docker/daemon.json <<EOL
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  },
-  "default-address-pools": [
-    {"base":"${DOCKER_ADDRESS_POOL_BASE}","size":${DOCKER_ADDRESS_POOL_SIZE}}
-  ]
-}
-EOL
+if [ -f "$DAEMON_JSON" ]; then
+    if [ "$UPDATE_ADDRESS_POOLS" = true ]; then
+        jq \
+            --arg base "$DOCKER_ADDRESS_POOL_BASE" \
+            --argjson size "$DOCKER_ADDRESS_POOL_SIZE" \
+            '.["log-driver"] = "json-file" |
+             .["log-opts"] = ((.["log-opts"] // {}) + {"max-size":"10m","max-file":"3"}) |
+             .["default-address-pools"] = [{"base": $base, "size": $size}]' \
+            "$DAEMON_JSON" >"$DAEMON_JSON_TMP"
+    else
+        jq \
+            '.["log-driver"] = "json-file" |
+             .["log-opts"] = ((.["log-opts"] // {}) + {"max-size":"10m","max-file":"3"})' \
+            "$DAEMON_JSON" >"$DAEMON_JSON_TMP"
+    fi
+else
+    jq -n \
+        --arg base "$DOCKER_ADDRESS_POOL_BASE" \
+        --argjson size "$DOCKER_ADDRESS_POOL_SIZE" \
+        '{
+            "log-driver": "json-file",
+            "log-opts": {
+                "max-size": "10m",
+                "max-file": "3"
+            },
+            "default-address-pools": [
+                {"base": $base, "size": $size}
+            ]
+        }' >"$DAEMON_JSON_TMP"
+fi
+
+if [ -f "$DAEMON_JSON" ] && jq --sort-keys . "$DAEMON_JSON" >"$DAEMON_JSON_CURRENT_SORTED" 2>/dev/null && jq --sort-keys . "$DAEMON_JSON_TMP" >"$DAEMON_JSON_MERGED_SORTED" 2>/dev/null && cmp -s "$DAEMON_JSON_CURRENT_SORTED" "$DAEMON_JSON_MERGED_SORTED"; then
+    echo " - Configuration is up to date"
     NEED_MERGE=false
+    rm -f "$DAEMON_JSON_TMP" "$DAEMON_JSON_CURRENT_SORTED" "$DAEMON_JSON_MERGED_SORTED"
+else
+    if [ "$EXISTING_POOL_CONFIGURED" = true ] && [ "$UPDATE_ADDRESS_POOLS" = true ]; then
+        echo " - Merging updated Docker settings into existing configuration"
+    elif [ "$EXISTING_POOL_CONFIGURED" = true ]; then
+        echo " - Refreshing Docker log configuration while preserving existing settings"
+    else
+        echo " - Creating Docker configuration with Coolify settings"
+    fi
+    mv "$DAEMON_JSON_TMP" "$DAEMON_JSON"
+    NEED_MERGE=true
 fi
 
-if [ -s /etc/docker/daemon.json.original-"$DATE" ]; then
-    DIFF=$(diff <(jq --sort-keys . /etc/docker/daemon.json) <(jq --sort-keys . /etc/docker/daemon.json.original-"$DATE") || true)
-    if [ "$DIFF" != "" ]; then
-        echo " - Checking configuration changes..."
-
-        # Check if address pools were changed
-        if echo "$DIFF" | grep -q "default-address-pools"; then
-            if [ "$DOCKER_POOL_BASE_PROVIDED" = true ] || [ "$DOCKER_POOL_SIZE_PROVIDED" = true ]; then
-                echo " - Network pool updated per user request"
-            else
-                echo " - Warning: Network pool modified without explicit request"
-            fi
-        fi
-
-        # Remove this redundant restart since we already restarted when writing the config
-        echo " - Configuration changes confirmed"
-        if [ "$NEED_MERGE" = true ]; then
-            echo " - Configuration updated - restarting Docker daemon..."
-            restart_docker_service
-        else
-            echo " - Configuration is up to date"
-        fi
-    else
-        echo " - Configuration is up to date"
-    fi
-else
-    if [ "$NEED_MERGE" = true ]; then
-        echo " - Configuration updated - restarting Docker daemon..."
-        restart_docker_service
-    else
-        echo " - Configuration is up to date"
-    fi
+if [ "$NEED_MERGE" = true ]; then
+    echo " - Configuration updated - restarting Docker daemon..."
+    restart_docker_service
 fi
 
 log_section "Step 5/9: Downloading required files from CDN"

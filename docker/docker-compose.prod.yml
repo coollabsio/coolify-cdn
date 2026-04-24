@@ -55,7 +55,7 @@ services:
     volumes:
       - coolify-redis:/data
     healthcheck:
-      test: redis-cli ping
+      test: [ "CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli --no-auth-warning ping | grep -qx PONG" ]
       interval: 5s
       retries: 10
       timeout: 2s

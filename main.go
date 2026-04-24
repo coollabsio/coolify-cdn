@@ -395,8 +395,8 @@ func handleRequest(w http.ResponseWriter, r *http.Request, baseFQDN string, file
 	// Check if file exists
 	fileData, exists := files[r.URL.Path]
 	if !exists {
-		// 404 redirect to base FQDN (without path)
-		http.Redirect(w, r, "https://"+baseFQDN, http.StatusFound)
+		// 404 redirect to base FQDN while preserving the requested path and query.
+		http.Redirect(w, r, "https://"+baseFQDN+r.URL.RequestURI(), http.StatusFound)
 		return
 	}
 

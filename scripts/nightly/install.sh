@@ -316,25 +316,6 @@ if [ "$OS_TYPE" = 'amzn' ]; then
     dnf install -y findutils >/dev/null
 fi
 
-# Fetch versions.json once and parse all values from it
-VERSIONS_JSON=$(curl -L --silent $CDN/versions.json)
-LATEST_VERSION=$(echo "$VERSIONS_JSON" | jq -r '.coolify.nightly.version // empty')
-LATEST_HELPER_VERSION=$(echo "$VERSIONS_JSON" | jq -r '.coolify.helper.version // empty')
-LATEST_REALTIME_VERSION=$(echo "$VERSIONS_JSON" | jq -r '.coolify.realtime.version // empty')
-
-if [ -z "$LATEST_VERSION" ]; then
-    echo "Failed to parse nightly version from versions.json"
-    exit 1
-fi
-
-if [ -z "$LATEST_HELPER_VERSION" ]; then
-    LATEST_HELPER_VERSION=latest
-fi
-
-if [ -z "$LATEST_REALTIME_VERSION" ]; then
-    LATEST_REALTIME_VERSION=latest
-fi
-
 case "$OS_TYPE" in
 arch | ubuntu | debian | raspbian | centos | fedora | rhel | ol | rocky | sles | opensuse-leap | opensuse-tumbleweed | almalinux | amzn | alpine | postmarketos | tencentos) ;;
 *)
@@ -342,24 +323,6 @@ arch | ubuntu | debian | raspbian | centos | fedora | rhel | ol | rocky | sles |
     exit
     ;;
 esac
-
-# Overwrite LATEST_VERSION if user pass a version number
-if [ "$1" != "" ]; then
-    LATEST_VERSION=$1
-    LATEST_VERSION="${LATEST_VERSION,,}"
-    LATEST_VERSION="${LATEST_VERSION#v}"
-fi
-
-echo "---------------------------------------------"
-echo "| Operating System  | $OS_TYPE $OS_VERSION"
-echo "| Docker            | $DOCKER_VERSION"
-echo "| Coolify           | $LATEST_VERSION"
-echo "| Helper            | $LATEST_HELPER_VERSION"
-echo "| Realtime          | $LATEST_REALTIME_VERSION"
-echo "| Docker Pool       | $DOCKER_ADDRESS_POOL_BASE (size $DOCKER_ADDRESS_POOL_SIZE)"
-echo "| Registry URL      | $REGISTRY_URL"
-echo "---------------------------------------------"
-echo ""
 
 log_section "Step 1/9: Installing required packages"
 echo "1/9 Installing required packages (curl, wget, git, jq, openssl)..."
@@ -410,6 +373,47 @@ else
     log "Required packages installed successfully"
 fi
 echo "     Done."
+
+# Fetch versions.json once and parse all values from it (jq is now guaranteed to be installed)
+VERSIONS_JSON=$(curl -L --silent $CDN/versions.json)
+if ! echo "$VERSIONS_JSON" | jq -e . >/dev/null 2>&1; then
+    echo "Failed to fetch or parse versions.json from $CDN"
+    exit 1
+fi
+LATEST_VERSION=$(echo "$VERSIONS_JSON" | jq -r '.coolify.nightly.version // empty')
+LATEST_HELPER_VERSION=$(echo "$VERSIONS_JSON" | jq -r '.coolify.helper.version // empty')
+LATEST_REALTIME_VERSION=$(echo "$VERSIONS_JSON" | jq -r '.coolify.realtime.version // empty')
+
+if [ -z "$LATEST_VERSION" ]; then
+    echo "Failed to parse nightly version from versions.json"
+    exit 1
+fi
+
+if [ -z "$LATEST_HELPER_VERSION" ]; then
+    LATEST_HELPER_VERSION=latest
+fi
+
+if [ -z "$LATEST_REALTIME_VERSION" ]; then
+    LATEST_REALTIME_VERSION=latest
+fi
+
+# Overwrite LATEST_VERSION if user pass a version number
+if [ "$1" != "" ]; then
+    LATEST_VERSION=$1
+    LATEST_VERSION="${LATEST_VERSION,,}"
+    LATEST_VERSION="${LATEST_VERSION#v}"
+fi
+
+echo "---------------------------------------------"
+echo "| Operating System  | $OS_TYPE $OS_VERSION"
+echo "| Docker            | $DOCKER_VERSION"
+echo "| Coolify           | $LATEST_VERSION"
+echo "| Helper            | $LATEST_HELPER_VERSION"
+echo "| Realtime          | $LATEST_REALTIME_VERSION"
+echo "| Docker Pool       | $DOCKER_ADDRESS_POOL_BASE (size $DOCKER_ADDRESS_POOL_SIZE)"
+echo "| Registry URL      | $REGISTRY_URL"
+echo "---------------------------------------------"
+echo ""
 
 log_section "Step 2/9: Checking OpenSSH server configuration"
 echo "2/9 Checking OpenSSH server configuration..."

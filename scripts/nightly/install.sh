@@ -397,7 +397,7 @@ if [ -z "$LATEST_REALTIME_VERSION" ]; then
     LATEST_REALTIME_VERSION=latest
 fi
 
-# Overwrite LATEST_VERSION if user pass a version number
+# Overwrite LATEST_VERSION if user passes a version number
 if [ "$1" != "" ]; then
     LATEST_VERSION=$1
     LATEST_VERSION="${LATEST_VERSION,,}"

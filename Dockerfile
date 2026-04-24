@@ -10,7 +10,8 @@ COPY go.mod* go.sum* ./
 RUN go mod download
 
 # Copy source code
-COPY main.go healthcheck.go ./
+COPY main.go ./
+COPY cmd/healthcheck/ ./cmd/healthcheck/
 COPY json/ ./json/
 COPY images/ ./images/
 COPY scripts/ ./scripts/
@@ -20,7 +21,7 @@ COPY environment/ ./environment/
 # Build the binaries with optimizations for the target platform
 ARG TARGETOS TARGETARCH BASE_FQDN=coolify.io
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -installsuffix cgo -o coolify-cdn main.go
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -installsuffix cgo -o healthcheck healthcheck.go
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -installsuffix cgo -o healthcheck ./cmd/healthcheck
 
 # Final stage
 FROM scratch

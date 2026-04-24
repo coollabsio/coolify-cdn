@@ -318,9 +318,14 @@ fi
 
 # Fetch versions.json once and parse all values from it
 VERSIONS_JSON=$(curl -L --silent $CDN/versions.json)
-LATEST_VERSION=$(echo "$VERSIONS_JSON" | grep -i version | xargs | awk '{print $2}' | tr -d ',')
-LATEST_HELPER_VERSION=$(echo "$VERSIONS_JSON" | grep -i version | xargs | awk '{print $6}' | tr -d ',')
-LATEST_REALTIME_VERSION=$(echo "$VERSIONS_JSON" | grep -i version | xargs | awk '{print $8}' | tr -d ',')
+LATEST_VERSION=$(echo "$VERSIONS_JSON" | jq -r '.coolify.nightly.version // empty')
+LATEST_HELPER_VERSION=$(echo "$VERSIONS_JSON" | jq -r '.coolify.helper.version // empty')
+LATEST_REALTIME_VERSION=$(echo "$VERSIONS_JSON" | jq -r '.coolify.realtime.version // empty')
+
+if [ -z "$LATEST_VERSION" ]; then
+    echo "Failed to parse nightly version from versions.json"
+    exit 1
+fi
 
 if [ -z "$LATEST_HELPER_VERSION" ]; then
     LATEST_HELPER_VERSION=latest

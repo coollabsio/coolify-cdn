@@ -656,11 +656,18 @@ DAEMON_JSON_TMP=$(mktemp)
 DAEMON_JSON_CURRENT_SORTED=$(mktemp)
 DAEMON_JSON_MERGED_SORTED=$(mktemp)
 UPDATE_ADDRESS_POOLS=false
+NEED_MERGE=false
 
 if [ "$EXISTING_POOL_CONFIGURED" = false ]; then
     UPDATE_ADDRESS_POOLS=true
 elif [ "$DOCKER_POOL_FORCE_OVERRIDE" = true ] && { [ "$DOCKER_POOL_BASE_PROVIDED" = true ] || [ "$DOCKER_POOL_SIZE_PROVIDED" = true ]; }; then
     UPDATE_ADDRESS_POOLS=true
+fi
+
+# Validate existing daemon.json; remove it if empty or not parseable so a fresh config is created below
+if [ -f "$DAEMON_JSON" ] && { [ ! -s "$DAEMON_JSON" ] || ! jq . "$DAEMON_JSON" >/dev/null 2>&1; }; then
+    echo " - Warning: /etc/docker/daemon.json is empty or contains invalid JSON. Creating a fresh configuration."
+    rm -f "$DAEMON_JSON"
 fi
 
 if [ -f "$DAEMON_JSON" ]; then
@@ -707,6 +714,7 @@ else
         echo " - Creating Docker configuration with Coolify settings"
     fi
     mv "$DAEMON_JSON_TMP" "$DAEMON_JSON"
+    rm -f "$DAEMON_JSON_CURRENT_SORTED" "$DAEMON_JSON_MERGED_SORTED"
     NEED_MERGE=true
 fi
 

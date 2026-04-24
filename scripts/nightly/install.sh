@@ -137,38 +137,51 @@ if [ -f "/data/coolify/source/.env" ] && [ "$DOCKER_POOL_BASE_PROVIDED" = false 
     fi
 fi
 
-# Check if daemon.json exists and extract existing address pool configuration
-EXISTING_POOL_CONFIGURED=false
-if [ -f /etc/docker/daemon.json ]; then
-    if jq -e '.["default-address-pools"]' /etc/docker/daemon.json >/dev/null 2>&1; then
-        EXISTING_POOL_BASE=$(jq -r '.["default-address-pools"][0].base' /etc/docker/daemon.json 2>/dev/null || true)
-        EXISTING_POOL_SIZE=$(jq -r '.["default-address-pools"][0].size' /etc/docker/daemon.json 2>/dev/null || true)
+detect_existing_docker_address_pool() {
+    EXISTING_POOL_CONFIGURED=false
+    EXISTING_POOL_BASE=""
+    EXISTING_POOL_SIZE=""
 
-        if [ -n "$EXISTING_POOL_BASE" ] && [ -n "$EXISTING_POOL_SIZE" ] && [ "$EXISTING_POOL_BASE" != "null" ] && [ "$EXISTING_POOL_SIZE" != "null" ]; then
-            echo "Found existing Docker network pool: $EXISTING_POOL_BASE/$EXISTING_POOL_SIZE"
-            EXISTING_POOL_CONFIGURED=true
+    if ! command -v jq >/dev/null 2>&1; then
+        DOCKER_POOL_DETECTION_NEEDS_RETRY=true
+        return
+    fi
+    DOCKER_POOL_DETECTION_NEEDS_RETRY=false
 
-            # Check if environment variables were explicitly provided
-            if [ "$DOCKER_POOL_BASE_PROVIDED" = false ] && [ "$DOCKER_POOL_SIZE_PROVIDED" = false ]; then
-                DOCKER_ADDRESS_POOL_BASE="$EXISTING_POOL_BASE"
-                DOCKER_ADDRESS_POOL_SIZE="$EXISTING_POOL_SIZE"
-            else
-                # Check if force override is enabled
-                if [ "$DOCKER_POOL_FORCE_OVERRIDE" = true ]; then
-                    echo "Force override enabled - network pool will be updated with $DOCKER_ADDRESS_POOL_BASE/$DOCKER_ADDRESS_POOL_SIZE."
-                else
-                    echo "Custom pool provided but force override not enabled - using existing configuration."
-                    echo "To force override, set DOCKER_POOL_FORCE_OVERRIDE=true"
-                    echo "This won't change the existing docker networks, only the pool configuration for the newly created networks."
+    if [ -f /etc/docker/daemon.json ]; then
+        if jq -e '.["default-address-pools"]' /etc/docker/daemon.json >/dev/null 2>&1; then
+            EXISTING_POOL_BASE=$(jq -r '.["default-address-pools"][0].base' /etc/docker/daemon.json 2>/dev/null || true)
+            EXISTING_POOL_SIZE=$(jq -r '.["default-address-pools"][0].size' /etc/docker/daemon.json 2>/dev/null || true)
+
+            if [ -n "$EXISTING_POOL_BASE" ] && [ -n "$EXISTING_POOL_SIZE" ] && [ "$EXISTING_POOL_BASE" != "null" ] && [ "$EXISTING_POOL_SIZE" != "null" ]; then
+                echo "Found existing Docker network pool: $EXISTING_POOL_BASE/$EXISTING_POOL_SIZE"
+                EXISTING_POOL_CONFIGURED=true
+
+                # Check if environment variables were explicitly provided
+                if [ "$DOCKER_POOL_BASE_PROVIDED" = false ] && [ "$DOCKER_POOL_SIZE_PROVIDED" = false ]; then
                     DOCKER_ADDRESS_POOL_BASE="$EXISTING_POOL_BASE"
                     DOCKER_ADDRESS_POOL_SIZE="$EXISTING_POOL_SIZE"
-                    DOCKER_POOL_BASE_PROVIDED=false
-                    DOCKER_POOL_SIZE_PROVIDED=false
+                else
+                    # Check if force override is enabled
+                    if [ "$DOCKER_POOL_FORCE_OVERRIDE" = true ]; then
+                        echo "Force override enabled - network pool will be updated with $DOCKER_ADDRESS_POOL_BASE/$DOCKER_ADDRESS_POOL_SIZE."
+                    else
+                        echo "Custom pool provided but force override not enabled - using existing configuration."
+                        echo "To force override, set DOCKER_POOL_FORCE_OVERRIDE=true"
+                        echo "This won't change the existing docker networks, only the pool configuration for the newly created networks."
+                        DOCKER_ADDRESS_POOL_BASE="$EXISTING_POOL_BASE"
+                        DOCKER_ADDRESS_POOL_SIZE="$EXISTING_POOL_SIZE"
+                        DOCKER_POOL_BASE_PROVIDED=false
+                        DOCKER_POOL_SIZE_PROVIDED=false
+                    fi
                 fi
             fi
         fi
     fi
-fi
+}
+
+DOCKER_POOL_DETECTION_NEEDS_RETRY=false
+detect_existing_docker_address_pool
 
 # Validate Docker address pool configuration
 if ! [[ $DOCKER_ADDRESS_POOL_BASE =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+$ ]]; then
@@ -405,6 +418,10 @@ else
     log "Required packages installed successfully"
 fi
 echo "     Done."
+
+if [ "$DOCKER_POOL_DETECTION_NEEDS_RETRY" = true ]; then
+    detect_existing_docker_address_pool
+fi
 
 log_section "Step 2/9: Checking OpenSSH server configuration"
 echo "2/9 Checking OpenSSH server configuration..."
@@ -652,9 +669,9 @@ if [ -f /etc/docker/daemon.json ]; then
 fi
 
 DAEMON_JSON="/etc/docker/daemon.json"
-DAEMON_JSON_TMP=$(mktemp)
-DAEMON_JSON_CURRENT_SORTED=$(mktemp)
-DAEMON_JSON_MERGED_SORTED=$(mktemp)
+DAEMON_JSON_TMP=$(mktemp /etc/docker/daemon.json.tmp.XXXXXX)
+DAEMON_JSON_CURRENT_SORTED=$(mktemp /etc/docker/daemon.json.current.XXXXXX)
+DAEMON_JSON_MERGED_SORTED=$(mktemp /etc/docker/daemon.json.merged.XXXXXX)
 UPDATE_ADDRESS_POOLS=false
 NEED_MERGE=false
 

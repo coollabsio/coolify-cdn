@@ -18,10 +18,11 @@ Coolify CDN is a lightweight Go-based CDN server that serves static JSON files a
 The main request handler (`handleRequest()`) processes requests in this order:
 1. Sets CORS headers for all requests
 2. Handles OPTIONS preflight requests (returns 204)
-3. Root path (`/`) → redirects to `https://{BASE_FQDN}`
-4. Health check (`/health`) → returns "healthy" with 200
-5. Known files → serves JSON or images with appropriate Content-Type and ETag caching
-6. Unknown files (404) → redirects to `https://{BASE_FQDN}{RequestURI}`
+3. Rejects unsupported methods with `405 Method Not Allowed`
+4. Root path (`/`) → redirects to `https://{BASE_FQDN}`
+5. Health check (`/health`) → returns "healthy" with 200
+6. Known files → serves JSON or images with appropriate Content-Type and ETag caching
+7. Unknown files (404) → redirects to `https://{BASE_FQDN}{RequestURI}`
 
 ### Caching Strategy
 - MD5-based ETags are calculated once at startup for all files

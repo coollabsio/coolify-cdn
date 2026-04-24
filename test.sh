@@ -163,7 +163,18 @@ else
     test_result "OPTIONS request returns 204 No Content" "FAIL" "204" "$http_code"
 fi
 
-# Test 9: HEAD request
+# Test 9: POST request
+echo -e "\n🚫 Testing POST Request"
+response=$(curl -s -w "HTTPSTATUS:%{http_code}" -X POST "$BASE_URL/releases.json")
+http_code=$(echo "$response" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+
+if [ "$http_code" = "405" ]; then
+    test_result "POST request returns 405 Method Not Allowed" "PASS"
+else
+    test_result "POST request returns 405 Method Not Allowed" "FAIL" "405" "$http_code"
+fi
+
+# Test 10: HEAD request
 echo -e "\n📋 Testing HEAD Request"
 response=$(curl -s -w "HTTPSTATUS:%{http_code}" -I "$BASE_URL/releases.json")
 http_code=$(echo "$response" | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
@@ -174,7 +185,7 @@ else
     test_result "HEAD request returns 200 OK" "FAIL" "200" "$http_code"
 fi
 
-# Test 10: PNG image endpoint
+# Test 11: PNG image endpoint
 echo -e "\n🖼️  Testing PNG Image Endpoint"
 http_code=$(curl -s -w "%{http_code}" -o /dev/null "$BASE_URL/cl-logo.png")
 content_length=$(curl -s -I "$BASE_URL/cl-logo.png" | grep -i "content-length" | tr -d '\r' | sed 's/.*: //')
@@ -185,7 +196,7 @@ else
     test_result "PNG image endpoint returns 200 and content" "FAIL" "200, content" "$http_code, length=$content_length"
 fi
 
-# Test 11: PNG image headers
+# Test 12: PNG image headers
 echo -e "\n🏷️  Testing PNG Image Headers"
 response=$(curl -s -I "$BASE_URL/cl-logo.png")
 content_type=$(echo "$response" | grep -i "content-type" | tr -d '\r')
@@ -217,7 +228,7 @@ else
     test_result "PNG image has CORS headers" "FAIL" "Access-Control-Allow-Origin: *" "$cors_origin"
 fi
 
-# Test 12: WEBP image endpoint
+# Test 13: WEBP image endpoint
 echo -e "\n🖼️  Testing WEBP Image Endpoint"
 http_code=$(curl -s -w "%{http_code}" -o /dev/null "$BASE_URL/discord-support-search1.webp")
 content_length=$(curl -s -I "$BASE_URL/discord-support-search1.webp" | grep -i "content-length" | tr -d '\r' | sed 's/.*: //')
@@ -228,7 +239,7 @@ else
     test_result "WEBP image endpoint returns 200 and content" "FAIL" "200, content" "$http_code, length=$content_length"
 fi
 
-# Test 13: WEBP image headers
+# Test 14: WEBP image headers
 echo -e "\n🏷️  Testing WEBP Image Headers"
 response=$(curl -s -I "$BASE_URL/discord-support-search1.webp")
 content_type=$(echo "$response" | grep -i "content-type" | tr -d '\r')

@@ -372,6 +372,13 @@ func handleRequest(w http.ResponseWriter, r *http.Request, baseFQDN string, file
 		return
 	}
 
+	// Reject unsupported methods before serving or redirecting content.
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD, OPTIONS")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
 	// Handle root path redirect
 	if r.URL.Path == "/" {
 		http.Redirect(w, r, "https://"+baseFQDN, http.StatusFound)
